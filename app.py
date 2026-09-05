@@ -250,7 +250,16 @@ else:
     low_risks = []
 
     for item in uncertain:
-        conf = get_leak_confidence(item["file_name"])
+        fname = item["file_name"]
+        if "/" in fname and not os.path.exists(fname):
+            entry = {
+                **item,
+                "confidence": None,
+                "risk": {"tier": "N/A", "action": "SKIP", "label": "REMOTE FILE", "color": "", "reset": "", "confidence": 0},
+            }
+            low_risks.append(entry)
+            continue
+        conf = get_leak_confidence(fname)
         if conf is not None:
             risk = categorize_risk(conf)
             entry = {**item, "confidence": conf, "risk": risk}
@@ -260,7 +269,6 @@ else:
                 medium_risks.append(entry)
             else:
                 low_risks.append(entry)
-
     ml_col1, ml_col2, ml_col3 = st.columns(3)
 
     with ml_col1:
@@ -290,11 +298,17 @@ else:
         st.metric("Count", len(low_risks))
         if low_risks:
             for entry in low_risks:
-                st.success(
-                    f"`{entry['file_name']}` :green[**Line {entry['line_number']}**] "
-                    f"- `{entry['resource_name']}`\n"
-                    f"Confidence: {entry['confidence']:.1f}% | Action: {entry['risk']['action']}"
-                )
+                if entry["confidence"] is not None:
+                    st.success(
+                        f"`{entry['file_name']}` :green[**Line {entry['line_number']}**] "
+                        f"- `{entry['resource_name']}`\n"
+                        f"Confidence: {entry['confidence']:.1f}% | Action: {entry['risk']['action']}"
+                    )
+                else:
+                    st.info(
+                        f"`{entry['file_name']}` **Line {entry['line_number']}** "
+                        f"- `{entry['resource_name']}` | Remote file (ML skipped)"
+                    )
 
 st.markdown("---")
 
