@@ -64,15 +64,40 @@ def parse_github_url(url_or_owner_repo):
 def fetch_github_tree(owner, repo, branch="main"):
     import urllib.request
     import json
+    py_files = []
+
     url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1"
     try:
         req = urllib.request.Request(url)
         req.add_header("Accept", "application/vnd.github.v3+json")
+        req.add_header("User-Agent", "LeakGuard-Dashboard")
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read().decode())
-            return [item["path"] for item in data.get("tree", []) if item["path"].endswith(".py")]
+            py_files = [item["path"] for item in data.get("tree", []) if item["path"].endswith(".py")]
+            if py_files:
+                return py_files
     except Exception:
-        return []
+        pass
+
+    dirs_to_check = [""]
+    while dirs_to_check:
+        current = dirs_to_check.pop()
+        url = f"https://api.github.com/repos/{owner}/{repo}/contents/{current}?ref={branch}"
+        try:
+            req = urllib.request.Request(url)
+            req.add_header("Accept", "application/vnd.github.v3+json")
+            req.add_header("User-Agent", "LeakGuard-Dashboard")
+            with urllib.request.urlopen(req) as resp:
+                items = json.loads(resp.read().decode())
+                for item in items:
+                    if item["type"] == "file" and item["path"].endswith(".py"):
+                        py_files.append(item["path"])
+                    elif item["type"] == "dir":
+                        dirs_to_check.append(item["path"])
+        except Exception:
+            continue
+
+    return py_files
 
 def fetch_github_file(owner, repo, filepath, branch="main"):
     import urllib.request
@@ -81,6 +106,7 @@ def fetch_github_file(owner, repo, filepath, branch="main"):
     try:
         req = urllib.request.Request(url)
         req.add_header("Accept", "application/vnd.github.v3+json")
+        req.add_header("User-Agent", "LeakGuard-Dashboard")
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read().decode())
             if data.get("encoding") == "base64":
